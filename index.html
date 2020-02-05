@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>us_president_2016_choropleth</title>
+		<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.9/topojson.min.js"></script>
+		<style type="text/css">
+        #sampleButton {
+            width: 500px;
+            margin-top: 5px;
+            text-align: center;
+            }
+    
+        #sampleButton button {
+            font-size: 20px;
+            color: #fff;
+            }
+            
+	   /*吹き出しの形*/  
+        #tooltip{
+            position:absolute;
+            width:auto;
+            height:auto;
+            padding:10px;
+            background-color:white;
+            opacity: 0.7;
+            /*
+            -webkit-border-radius:10px;
+            -moz-border-radius:10px;
+            border-radius:10px;
+            */
+            -webkit-box-shadow:4px 4px 10px rgba(0,0,0,0.4);
+            -moz-box-shadow:4px 4px 10px rgba(0,0,0,1.0);
+            pointer-events:none;
+            }
+
+    /*吹き出しの操作*/
+       #tooltip.hidden{
+            display:none;
+            }
+
+    /*吹き出しの文字の形*/
+      #tooltip p{
+            margin:0;
+            font-family:sans-serif;
+            font-size:15px;
+            line-height:20px;
+            }
+      #winner {
+            font-size:20px;
+            }
+      #elector {
+            font-size:20px;
+            }
+      #value1, #value2, #name1, #name2, .comma {
+            font-size:12px;
+            }
+     
+            
+		</style>
+	</head>
+	<body>
+        <h1>US Presidential Election</h1>
+        
+        <div id="sampleButton">
+            <button class="btn" id="btn1" >1996</button>
+            <button class="btn" id="btn2" >2000</button>
+            <button class="btn" id="btn3" >2004</button>
+            <button class="btn" id="btn4" >2008</button>
+            <button class="btn" id="btn5" >2012</button>
+            <button class="btn" id="btn6" >2016</button>
+        </div>
+        
+        <!-- 吹き出しを設定 -->
+        <div id="tooltip" class="hidden">
+            <p><span id="state">州</span> : <span id="elector">項目</span></p>
+            <p><strong><span id="winner">候補者</span></strong></p>
+            <p><span id="name1"></span><span class="comma"> : </span><span id="value1"></span></p>
+            <p><span id="name2"></span><span class="comma"> : </span><span id="value2"></span></p>
+            
+        </div>
+        
+		<script type="text/javascript">
+
+			//Width and height
+			var w = 1400;
+			var h = 500;
+
+			//Define map projection
+			var projection = d3.geo.albersUsa()
+								   .translate([w/2, h/2])
+								   .scale([1100]);
+
+			//Define path generator
+			var path = d3.geo.path()
+							 .projection(projection);
+							 
+			//Define quantize scale to sort data values into buckets of color
+			var color = d3.scale.quantize()
+								.range(["indianred","steelblue"]);
+								//Colors taken from colorbrewer.js, included in the D3 download
+
+			//Create SVG element
+			var svg = d3.select("body")
+						.append("svg")
+						.attr("width", w)
+						.attr("height", h);
+            
+            
+            getJson();
+            
+            var mapJson;
+            
+            function getJson(){
+                
+                d3.json("us-states.json", function(usJson) {
+                    // us-states.json を mapDataに保存
+                    mapJson = usJson;
+                    d3.csv("us-president-1996.csv", function(data) {
+                        setColorDomain(data);
+                        drawUSMap(data);
+                    })
+                })
+            }
+            
+         
+            
+            function setColorDomain(data){
+                color.domain([
+					d3.min(data, function(d) { return d.result; }), 
+					d3.max(data, function(d) { return d.result; })
+				]);
+            }
+            
+            function setElectionInfo(json,data){
+                
+ 					for (var i = 0; i < data.length; i++) {
+                        
+						//Grab state name
+						var dataState = data[i].state;
+						
+						//Grab data value, and convert from string to float
+						var dataResult = parseInt(data[i].result);
+                        var dataElector = data[i].elector;
+                        var dataWinner = data[i].winner;
+                        var dataLoser = data[i].loser;
+                        var dataVote1 = parseInt(data[i].DEM_C);
+                        var dataVote2 = parseInt(data[i].REP_C);
+                        //console.log(dataWinner);
+				
+						//Find the corresponding state inside the GeoJSON
+                        // console.log(json)
+				    for (var j = 0; j < json.features.length; j++) {
+						
+				        var jsonState = json.features[j].properties.name;
+                            
+                        //console.log(jsonState); 
+				
+							if (dataState == jsonState) {
+						
+								//Copy the data value into the JSON
+								json.features[j].properties.result = dataResult;
+                                json.features[j].properties.elector = dataElector;
+                                json.features[j].properties.winner = dataWinner;
+                                json.features[j].properties.loser = dataLoser;
+                                json.features[j].properties.DEM_C = dataVote1;
+                                json.features[j].properties.REP_C = dataVote2;
+								
+								//Stop looking through the JSON
+								break;						
+							}
+						}		
+					}  
+                
+                    return json;
+            }
+            
+            var map,
+                paths;
+            
+            function drawUSMap(data){
+					//Merge the ag. data and GeoJSON
+					//Loop through once for each ag. data value
+                    mapJson = setElectionInfo(mapJson,data);
+
+					//Bind data and create one path per GeoJSON feature
+					map = svg.selectAll("path")
+					   .data(mapJson.features)
+                    
+                   
+                    paths = map.enter()
+					   .append("path")
+					   .attr("d", path)
+                       .style("stroke","white")
+                    
+                     paths.style("fill", function(d) {
+                                //console.log(this);
+                        
+						   		return color(d.properties.result);	
+					   })
+					   
+                    
+                    paths.on("mouseover",　function(d){
+                            //console.log(this);
+                            var center=path.centroid(d);
+                            //console.log(center);
+        
+                            //座標の原点は円グラフの中心部？
+                            var xPosition=center[0];
+                            //console.log(xPosition);
+                            var yPosition=center[1];
+                            //console.log(yPosition);
+                        
+                            d3.select("#tooltip")
+                                .style("left",xPosition+"px")
+                                .style("top",yPosition+"px")
+                                .select("#winner")
+                                .text(d.properties.winner)
+                    
+                            d3.select("#tooltip")
+                                .select("#elector")
+                                .text(d.properties.elector)
+                            
+                            d3.select("#tooltip")
+                                .select("#state")
+                                .text(d.properties.name)
+                            
+                            d3.select("#tooltip")
+                                .select("#name1")
+                                .text(data[0].loser)
+                            
+                            d3.select("#tooltip")
+                                .select("#value1")
+                                .text(d.properties.DEM_C)
+                                .text(setUnitComma(d.properties.DEM_C))
+                            
+                            d3.select("#tooltip")
+                                .select("#name2")
+                                .text(data[0].winner)
+                            
+                            d3.select("#tooltip")
+                                .select("#value2")
+                                .text(d.properties.REP_C)
+                                .text(setUnitComma(d.properties.REP_C))
+                            
+                            d3.select("#tooltip").classed("hidden",false);
+                       })
+                    
+                    　　.on("mouseout",　function(){
+                            d3.select("#tooltip").classed("hidden",true);
+                       })
+                    
+                    
+                  
+            }
+            
+            function updateMapYear(year){
+                
+                d3.csv("us-president-"+year+".csv", function(data) {
+                    // console.log(data)
+                    // setColorDomain(data);
+                    updateMapColor(data);
+                    
+                })
+            }
+            
+            function updateMapColor(data){
+                //　保存しておいた us-states.json　を更新
+                mapJson = setElectionInfo(mapJson,data);
+                map.data(mapJson.features)
+                paths.transition().style("fill", function(d) {
+    
+						   		return color(d.properties.result);	
+					   })
+            }
+            
+            
+            d3.selectAll('.btn')
+                .on('click',function(){
+                    var year = this.textContent;
+                    updateMapYear(year)
+            })
+            
+
+            
+//兆と億で単位を区切る
+  function setUnitComma(num) {
+      var value = num.toString();
+      return value.replace(/(\d)(?=(\d{3})+$)/g , '$1,');
+  }
+
+		</script>
+	</body>
+</html>
